@@ -1,0 +1,44 @@
+# Environment files — never commit real secrets
+.env
+.env.*
+!.env.example
+*.env
+!example.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / Vercel
+node_modules/
+.vercel/
+.next/
+dist/
+build/
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+!example.tfvars
+
+# Local data volumes (if bind-mounted)
+data/
+.data/
+pgdata/
+miniodata/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

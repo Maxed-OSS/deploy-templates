@@ -1,0 +1,134 @@
+# deploy-templates - local bring-up for a self-hosted accounting workspace.
+#
+# This stack is COMMODITY INFRASTRUCTURE only: a Postgres database (with an
+# RLS-ready bootstrap so you can build row-scoped multi-tenant apps on top),
+# Redis for cache/queues, a MinIO S3-compatible object store, and a generic
+# API placeholder you replace with your own service.
+#
+# Bring everything up with:  ./scripts/up.sh   (or: docker compose up -d)
+#
+# All credentials come from the .env file (copy .env.example -> .env first).
+name: accounting-workspace
+
+services:
+  # ----------------------------------------------------------------------
+  # Postgres - primary relational store.
+  # The initdb/ scripts create an app role and demonstrate enabling Row
+  # Level Security so app-layer code can scope rows per workspace/tenant.
+  # ----------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-workspace}
+      # Used by initdb scripts to create a least-privilege application role.
+      APP_DB_USER: ${APP_DB_USER:-app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-app}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./compose/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-workspace}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ----------------------------------------------------------------------
+  # Redis - cache, rate-limit buckets, and background-job queues.
+  # ----------------------------------------------------------------------
+  cache:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - cache-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ----------------------------------------------------------------------
+  # MinIO - S3-compatible object storage for documents, exports, uploads.
+  # ----------------------------------------------------------------------
+  storage:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - storage-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ----------------------------------------------------------------------
+  # storage-init - one-shot job that creates the default bucket so the
+  # API has somewhere to write the moment the stack is healthy.
+  # ----------------------------------------------------------------------
+  storage-init:
+    image: minio/mc:latest
+    depends_on:
+      storage:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mc alias set local http://storage:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
+        mc mb --ignore-existing "local/$${S3_BUCKET}" &&
+        echo "bucket $${S3_BUCKET} ready"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${S3_BUCKET:-workspace-documents}
+    restart: "no"
+
+  # ----------------------------------------------------------------------
+  # api - generic placeholder service. Replace the build context with your
+  # own application image; the included FastAPI app only proves the wiring
+  # (it reports the health of db, cache, and storage). No business logic.
+  # ----------------------------------------------------------------------
+  api:
+    build:
+      context: ./compose/api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${APP_DB_USER:-app}:${APP_DB_PASSWORD:-app}@db:5432/${POSTGRES_DB:-workspace}
+      REDIS_URL: redis://cache:6379/0
+      S3_ENDPOINT_URL: http://storage:9000
+      S3_BUCKET: ${S3_BUCKET:-workspace-documents}
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      APP_PORT: "8000"
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  db-data:
+  cache-data:
+  storage-data:

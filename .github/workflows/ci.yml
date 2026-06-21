@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dev deps
+        run: pip install -r requirements-dev.txt
+
+      - name: Validate compose config
+        run: bash scripts/validate.sh
+
+      - name: Run tests
+        run: pytest
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform fmt check
+        run: terraform -chdir=terraform/examples/local fmt -check -recursive ..
+
+      - name: Terraform init + validate
+        run: |
+          terraform -chdir=terraform/examples/local init -backend=false
+          terraform -chdir=terraform/examples/local validate
