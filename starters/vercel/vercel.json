@@ -5,7 +5,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://your-api-host.example.com/:path*"
+      "destination": "https://api.your-domain.example/:path*"
     }
   ],
   "headers": [

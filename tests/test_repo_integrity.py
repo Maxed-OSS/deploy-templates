@@ -83,7 +83,11 @@ FORBIDDEN_PATTERNS = [
     r"\bde-?id(?:entification)? patent\b",
     r"\bsignalstore\b",
     r"\bintegrus\b",
-    r"\bmaxed\b",
+    # The proprietary product name is forbidden, but the PUBLIC GitHub org
+    # handle "maxed-oss" is allowed (it appears in real clone/install URLs and
+    # CI badges). The negative lookahead lets "maxed-oss" through while still
+    # catching a bare "Maxed" used as the product name.
+    r"\bmaxed\b(?!-oss)",
     r"\bqwen\b",
     r"\bDGX\b",
     r"\bSpark\b",

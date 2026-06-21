@@ -6,14 +6,19 @@ on:
   pull_request:
 
 jobs:
+  # Unit/config tests + the public-safety gate, across supported Python versions.
   validate:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dev deps
         run: pip install -r requirements-dev.txt
@@ -24,6 +29,36 @@ jobs:
       - name: Run tests
         run: pytest
 
+  # Bring the real stack up and prove RLS tenant isolation end to end.
+  rls-isolation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bring up the stack
+        run: ./scripts/up.sh
+
+      - name: Wait for Postgres to be healthy
+        run: |
+          for i in $(seq 1 30); do
+            if docker compose exec -T db pg_isready -U app -d workspace >/dev/null 2>&1; then
+              echo "postgres ready"; exit 0
+            fi
+            echo "waiting for postgres ($i)..."; sleep 2
+          done
+          echo "postgres did not become ready" >&2
+          docker compose ps
+          docker compose logs db
+          exit 1
+
+      - name: Prove tenant isolation (tenant A cannot read/write tenant B)
+        run: ./scripts/rls_demo.sh
+
+      - name: Tear down
+        if: always()
+        run: ./scripts/down.sh --volumes
+
+  # Terraform formatting + validation for the registry-ready module.
   terraform:
     runs-on: ubuntu-latest
     steps:
@@ -32,9 +67,18 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
 
       - name: Terraform fmt check
-        run: terraform -chdir=terraform/examples/local fmt -check -recursive ..
+        run: terraform fmt -check -recursive terraform
 
       - name: Terraform init + validate
         run: |
           terraform -chdir=terraform/examples/local init -backend=false
           terraform -chdir=terraform/examples/local validate
+
+  # Build the API placeholder image to prove the Dockerfile is sound.
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API image
+        run: docker build -t deploy-templates-api ./compose/api

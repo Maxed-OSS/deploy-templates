@@ -9,17 +9,9 @@
 # the `random_*`/`local` placeholders with your cloud provider's resources
 # (e.g. aws_db_instance, aws_elasticache_cluster, aws_s3_bucket) - the
 # variables and outputs are already shaped for that swap.
+#
+# Version constraints live in versions.tf (Terraform Registry convention).
 # ---------------------------------------------------------------------------
-
-terraform {
-  required_version = ">= 1.3.0"
-  required_providers {
-    random = {
-      source  = "hashicorp/random"
-      version = ">= 3.0.0"
-    }
-  }
-}
 
 locals {
   db_identifier    = "${var.name_prefix}-db"

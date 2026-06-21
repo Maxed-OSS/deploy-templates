@@ -31,4 +31,7 @@ echo "  API readiness  : http://localhost:\${API_PORT:-8000}/readyz"
 echo "  MinIO console  : http://localhost:\${MINIO_CONSOLE_PORT:-9001}"
 echo "  Postgres       : localhost:\${POSTGRES_PORT:-5432}"
 echo
+echo "Prove tenant isolation once healthy:"
+echo "  ./scripts/rls_demo.sh   # tenant A cannot read or write tenant B's rows"
+echo
 echo "Check status: $COMPOSE ps"

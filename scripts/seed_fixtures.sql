@@ -19,11 +19,15 @@ INSERT INTO workspaces (id, name) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Notes are written with RLS active; set the workspace before each insert.
+-- Re-runnable: clear this tenant's demo notes first so counts stay stable
+-- (rls_demo.sh re-seeds on every run and asserts exact row counts).
 SELECT set_config('app.workspace_id', '11111111-1111-1111-1111-111111111111', false);
+DELETE FROM notes WHERE workspace_id = '11111111-1111-1111-1111-111111111111';
 INSERT INTO notes (workspace_id, body) VALUES
     ('11111111-1111-1111-1111-111111111111', 'Demo: Q1 close kickoff'),
     ('11111111-1111-1111-1111-111111111111', 'Demo: reconcile operating account');
 
 SELECT set_config('app.workspace_id', '22222222-2222-2222-2222-222222222222', false);
+DELETE FROM notes WHERE workspace_id = '22222222-2222-2222-2222-222222222222';
 INSERT INTO notes (workspace_id, body) VALUES
     ('22222222-2222-2222-2222-222222222222', 'Demo: onboard new vendor');
