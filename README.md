@@ -1,11 +1,15 @@
 # deploy-templates
 
-**A Postgres multi-tenant RLS starter you can actually trust** — plus the boring
-infrastructure (cache, object storage, deploy targets) that has to come with it.
+A developer starter kit for multi-tenant backends: a one-command local stack
+(Postgres + Redis + S3-compatible storage + API) where **tenant isolation is
+enforced by the database, not by hopeful application code**, plus open adapter
+interfaces, deployment starters, and a registry-ready Terraform module.
 
-One command brings up a local stack where **tenant isolation is enforced by the
-database, not by hopeful application code**. A scripted demo proves that tenant A
-literally cannot read tenant B's rows — even when the query "forgets" to filter.
+Point it at your own service and you start from a foundation that already has the
+hard parts solved: provable row-level tenant isolation, a vendor-neutral object
+store and double-entry export, and a path to production on managed cloud. A
+scripted demo proves that tenant A literally cannot read tenant B's rows, even
+when the query "forgets" to filter.
 
 ```bash
 git clone https://github.com/maxed-oss/deploy-templates
@@ -18,7 +22,7 @@ cd deploy-templates
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 
 > **Demo:** `./scripts/rls_demo.sh` runs in ~10s. A recorded walkthrough lives at
-> [`docs/demo.md`](./docs/demo.md) (asciinema cast + GIF placeholder — drop your
+> [`docs/demo.md`](./docs/demo.md) (asciinema cast + GIF placeholder; drop your
 > own recording in and the README link just works).
 
 ---
@@ -26,8 +30,8 @@ cd deploy-templates
 ## Why this exists
 
 Most "multi-tenant" apps enforce isolation with a `WHERE tenant_id = ?` that some
-engineer has to remember on **every single query**. Forget it once — in a report,
-a migration, a background job, an ORM `.all()` — and one tenant sees another's
+engineer has to remember on **every single query**. Forget it once, in a report,
+a migration, a background job, or an ORM `.all()`, and one tenant sees another's
 data. That is the classic SaaS data-leak.
 
 This starter does it the way you can defend in a security review: **Postgres Row
@@ -36,12 +40,9 @@ variable. The database itself refuses to return rows that don't belong to the
 active tenant. Fail-closed: if a request forgets to set its tenant, it sees
 **zero** rows, not everyone's.
 
-Everything else in the repo is the commodity scaffolding you need around that
-core — a cache, S3-compatible object storage, deploy starters, a registry-ready
-Terraform module, and open adapter interfaces — so you can stand up a real,
-reproducible foundation and drop your own application on top.
-
-It is **not** a product and contains no business logic.
+Everything else in the repo is the scaffolding around that core: a cache,
+S3-compatible object storage, deploy starters, a registry-ready Terraform
+module, and open adapter interfaces for a reproducible workspace foundation.
 
 ---
 
@@ -94,7 +95,7 @@ test (it runs in CI). See [`docs/demo.md`](./docs/demo.md) for a recorded run.
 | `docker-compose.yml` | One-command local stack: Postgres + Redis + MinIO + API placeholder. |
 | `compose/postgres/initdb/` | First-boot scripts: a least-privilege app role + an **RLS-ready bootstrap** demonstrating row-scoped multi-tenancy. |
 | `compose/api/` | A generic FastAPI placeholder that only proves the wiring (health of db/cache/storage). Replace it with your service. |
-| `scripts/rls_demo.sh` | The **RLS isolation proof** — tenant A cannot read tenant B. Runs in CI. |
+| `scripts/rls_demo.sh` | The **RLS isolation proof**: tenant A cannot read tenant B. Runs in CI. |
 | `adapters/` | Open, vendor-neutral interfaces: an S3-compatible **object store** and a double-entry **accounting export**, each with a working reference implementation. |
 | `terraform/` | A **registry-ready** module (versions, variables, outputs, a real example) for a managed Postgres + Redis + bucket deployment. |
 | `starters/railway/` | Deploy the API to Railway with managed Postgres/Redis. |
@@ -114,12 +115,12 @@ Multi-tenancy is enforced in the database, not just the application:
 3. Every tenant-scoped table has a policy: `workspace_id = current_workspace_id()`,
    with `WITH CHECK` so writes can't be mis-tagged.
 4. If the variable is unset, `current_workspace_id()` returns `NULL` and the policy
-   matches nothing — **fail-closed**.
+   matches nothing: **fail-closed**.
 5. `FORCE ROW LEVEL SECURITY` is enabled so even the table owner is filtered.
 
 The bootstrap ships a generic `workspaces` table and an example `notes` table so
 the pattern is runnable and testable out of the box. Replace `notes` with your own
-tables and copy the policy shape — see
+tables and copy the policy shape; see
 [`compose/postgres/initdb/10-rls-bootstrap.sql`](./compose/postgres/initdb/10-rls-bootstrap.sql).
 
 ---
@@ -221,11 +222,13 @@ ever lands in the repo.
 
 ---
 
-## Scope (what this repo deliberately is not)
+## Scope
 
-This is open **infrastructure glue only**. It intentionally contains no product
-business logic, no proprietary application schema, no AI/ML pipeline, and no real
-customer data - only synthetic fixtures. Build your application on top of it.
+This is a foundation for **your** application to build on: the multi-tenant data
+layer, storage and accounting interfaces, and deployment plumbing that most
+backends need and few enjoy writing. It deliberately ships no application
+business logic and no real customer data (only synthetic fixtures) so you can
+adopt the pieces you want and own everything above them.
 
 ---
 
